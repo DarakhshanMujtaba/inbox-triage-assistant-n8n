@@ -1,6 +1,4 @@
-[README.md](https://github.com/user-attachments/files/29973449/README.md)
-<div align="center">
-
+[README.md](https://github.com/user-attachments/files/29973616/README.md)
 # 📬 Inbox Triage Assistant
 
 **An n8n automation that reads your inbox, classifies emails with an LLM, and drafts replies — so you don't have to open every message just to know what matters.**
@@ -9,8 +7,6 @@
 ![Groq](https://img.shields.io/badge/Groq-Llama%203.3%2070B-F55036?style=flat)
 ![Gmail API](https://img.shields.io/badge/Gmail-API-EA4335?style=flat&logo=gmail&logoColor=white)
 ![Status](https://img.shields.io/badge/status-working%20prototype-brightgreen)
-
-</div>
 
 ---
 
@@ -28,18 +24,33 @@ Every new email that lands in the inbox is automatically:
 
 ## Architecture
 
-\`\`\`mermaid
-flowchart TD
-    A[📥 Gmail Trigger<br/>polls inbox every minute] --> B[🤖 Groq LLM<br/>classifies: urgent / spam / needs-reply]
-    B --> C[Parse response]
-    C --> D{Switch on category}
-    D -->|urgent| E[🏷️ Label: AI/Urgent]
-    D -->|spam| F[🏷️ Label: AI/Spam]
-    D -->|needs-reply| G[🏷️ Label: AI/NeedsReply]
-    G --> H[📄 Fetch full message<br/>decode body + sender]
-    H --> I[🤖 Groq LLM<br/>drafts a reply]
-    I --> J[📝 Gmail: Create Draft<br/>same thread, awaiting review]
-\`\`\`
+```
+Gmail Trigger (polls inbox every minute)
+        |
+        v
+Groq LLM classifies: urgent / spam / needs-reply
+        |
+        v
+Parse response -> Switch on category
+        |
+   +----+--------------+---------------+
+   |                   |               |
+ urgent              spam         needs-reply
+   |                   |               |
+   v                   v               v
+Label: AI/Urgent   Label: AI/Spam   Label: AI/NeedsReply
+                                        |
+                                        v
+                              Fetch full message
+                              (decode body + sender)
+                                        |
+                                        v
+                              Groq LLM drafts a reply
+                                        |
+                                        v
+                              Gmail: Create Draft
+                              (same thread, awaiting review)
+```
 
 ---
 
@@ -65,40 +76,25 @@ This isn't built to fully automate email — it's built to **remove the triage o
 
 ## Key technical challenges solved
 
-<details>
-<summary><b>1. Tone vs. intent in spam classification</b></summary>
-<br>
+**1. Tone vs. intent in spam classification**
 
-An early prompt version classified a generic-sounding "Congratulations on your new role" email as spam — the model was reading impersonal *tone* as a spam signal. Fixed by rewriting the system prompt to explicitly separate tone from intent, then validated against a 5-email test set (clear spam, clear urgent, casual needs-reply, and the original borderline case).
-</details>
+An early prompt version classified a generic-sounding "Congratulations on your new role" email as spam — the model was reading impersonal tone as a spam signal. Fixed by rewriting the system prompt to explicitly separate tone from intent, then validated against a 5-email test set (clear spam, clear urgent, casual needs-reply, and the original borderline case).
 
-<details>
-<summary><b>2. Decoding Gmail's nested MIME body structure</b></summary>
-<br>
+**2. Decoding Gmail's nested MIME body structure**
 
-Gmail's API returns message bodies as base64url-encoded MIME parts, often nested (\`multipart/alternative\` → \`parts[]\`). Wrote a recursive part-finder to locate the \`text/plain\` part at any nesting depth, with a snippet fallback if decoding fails.
-</details>
+Gmail's API returns message bodies as base64url-encoded MIME parts, often nested (`multipart/alternative` -> `parts[]`). Wrote a recursive part-finder to locate the `text/plain` part at any nesting depth, with a snippet fallback if decoding fails.
 
-<details>
-<summary><b>3. Field-name drift across Gmail node operations</b></summary>
-<br>
+**3. Field-name drift across Gmail node operations**
 
-Different Gmail operations (Trigger, Get, Add Label) return differently shaped JSON for the same data — e.g. message ID appears as \`id\` in some outputs and \`messageId\` in others, and \`headers\` is sometimes an array of \`{name, value}\` pairs and sometimes a flat keyed object. Required inspecting each node's raw output individually rather than assuming a consistent schema.
-</details>
+Different Gmail operations (Trigger, Get, Add Label) return differently shaped JSON for the same data — e.g. message ID appears as `id` in some outputs and `messageId` in others, and `headers` is sometimes an array of `{name, value}` pairs and sometimes a flat keyed object. Required inspecting each node's raw output individually rather than assuming a consistent schema.
 
-<details>
-<summary><b>4. Building valid JSON with multi-line email content</b></summary>
-<br>
+**4. Building valid JSON with multi-line email content**
 
-Injecting raw email text (with real line breaks) into a fixed-field JSON body broke the JSON parser. Solved by switching the HTTP Request body to Expression mode and building the payload with \`JSON.stringify()\`, which handles escaping automatically.
-</details>
+Injecting raw email text (with real line breaks) into a fixed-field JSON body broke the JSON parser. Solved by switching the HTTP Request body to Expression mode and building the payload with `JSON.stringify()`, which handles escaping automatically.
 
-<details>
-<summary><b>5. Keeping API keys out of the exported workflow</b></summary>
-<br>
+**5. Keeping API keys out of the exported workflow**
 
 Groq API keys were initially typed directly into request headers — which would have leaked into the exported workflow JSON. Moved authentication into n8n's Header Auth credential store, so the key never appears in the workflow file itself (verified by searching the exported JSON for the key prefix before publishing this repo).
-</details>
 
 ---
 
@@ -117,8 +113,4 @@ Groq API keys were initially typed directly into request headers — which would
 
 ---
 
-<div align="center">
-
-Built with n8n + Groq · [Report an issue](../../issues)
-
-</div>
+Built with n8n + Groq
