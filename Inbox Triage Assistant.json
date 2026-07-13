@@ -1,0 +1,486 @@
+{
+  "name": "Inbox Triage Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -960,
+        80
+      ],
+      "id": "45da0975-df07-419f-a3a4-6b109151d47d",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "KD07betugHfQG8Q0",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0,\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an email triage assistant. Classify the email into exactly one category: urgent, spam, or needs-reply.\\n\\nDefinitions:\\n- 'urgent': Requires action within hours — deadlines, emergencies, time-sensitive requests from real people or services.\\n- 'spam': Unsolicited promotional content, phishing attempts, mass marketing, or irrelevant automated notifications with no expected response. A formal or impersonal TONE alone does NOT make something spam — judge by INTENT (is it trying to sell/scam/mass-broadcast?) not by how personal it sounds.\\n- 'needs-reply': A genuine message from a real sender that reasonably expects a response, even if brief or formal. Congratulatory messages, introductions, and correspondence from identifiable senders fall here, not spam.\\n\\nRespond ONLY with valid JSON: {\\\"category\\\": \\\"urgent|spam|needs-reply\\\", \\\"reason\\\": \\\"one short sentence citing the specific signal used, not just tone\\\"}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Subject: {{ $json.payload.headers.find(h => h.name === 'Subject')?.value || 'No subject' }}\\nFrom: {{ $json.payload.headers.find(h => h.name === 'From')?.value || 'Unknown' }}\\nBody snippet: {{ $json.snippet }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -752,
+        80
+      ],
+      "id": "ceb25d42-888e-40c0-82ca-3c9e89a626bf",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fTuytw3j6xs77t09",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json.choices[0].message.content; const parsed = JSON.parse(raw); return { category: parsed.category, reason: parsed.reason, originalSubject: $('Gmail Trigger').item.json.snippet, threadId: $('Gmail Trigger').item.json.threadId, messageId: $('Gmail Trigger').item.json.id };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        80
+      ],
+      "id": "1a70f3fb-40c6-4fda-a85f-077e487ab4da",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "e82e3572-3e6a-4353-a17e-8ccad2c3e6c0",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "urgent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Urgent"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "88434a35-6db9-4af4-82b3-1755400055a7",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "spam",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Spam"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "5ae1367d-4d8d-4173-9b44-ec6b97149db4",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "needs-reply",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "NeedsReply"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -336,
+        80
+      ],
+      "id": "f3e4a175-36d8-42ec-a911-823df8a80b37",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.messageId }}",
+        "labelIds": [
+          "Label_3645687156910455901"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        32,
+        -240
+      ],
+      "id": "e4464774-16ab-4a18-951e-9ee6edd7f895",
+      "name": "Add label to message",
+      "webhookId": "f736289d-56b0-414a-a96e-22677e9d5ac7",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "KD07betugHfQG8Q0",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.messageId }}",
+        "labelIds": [
+          "Label_1782967144913229228"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        -144
+      ],
+      "id": "5b03a4db-8190-4b90-8edb-d46a467b68bb",
+      "name": "Add label to message1",
+      "webhookId": "64fc6ed5-50c0-4422-84fb-3c7c810a4cdd",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "KD07betugHfQG8Q0",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.messageId }}",
+        "labelIds": [
+          "Label_2911655351753898481"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -128,
+        256
+      ],
+      "id": "1378262a-3f37-4b87-b23a-1d51e5304c74",
+      "name": "Add label to message2",
+      "webhookId": "23600aa5-afcb-4907-b632-c3dfaeccb096",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "KD07betugHfQG8Q0",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        32,
+        112
+      ],
+      "id": "818824b5-2aa7-45c5-b298-82a34f7fb0c2",
+      "name": "Get a message",
+      "webhookId": "3b6584a9-12df-4a2c-9522-e7483af5bf9d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "KD07betugHfQG8Q0",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  fullBody: $json.text,\n  senderEmail: $json.from?.value?.[0]?.address || 'unknown',\n  senderName: $json.from?.value?.[0]?.name || '',\n  subject: $json.subject,\n  threadId: $json.threadId,\n  messageId: $json.id\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        112
+      ],
+      "id": "5731d96f-9262-4a96-9a5e-ca6b22b02d9c",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"llama-3.3-70b-versatile\",\n  temperature: 0.5,\n  messages: [\n    { role: \"system\", content: \"You are an email assistant drafting a reply on behalf of the user. Write a warm, professional, concise reply to the email below. Do not include a subject line. Sign off with just the first name inferred from context, or leave generic if unclear. Keep it under 100 words.\" },\n    { role: \"user\", content: \"From: \" + $json.senderName + \" <\" + $json.senderEmail + \">\\nSubject: \" + $json.subject + \"\\n\\n\" + $json.fullBody }\n  ]\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        400,
+        112
+      ],
+      "id": "1bad1db8-c677-45e3-856c-2bae11849f87",
+      "name": "HTTP Request1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fTuytw3j6xs77t09",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": " return { replyText: $json.choices[0].message.content, senderEmail: $('Code in JavaScript1').item.json.senderEmail, subject: $('Code in JavaScript1').item.json.subject, threadId: $('Code in JavaScript1').item.json.threadId, messageId: $('Code in JavaScript1').item.json.messageId };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        112
+      ],
+      "id": "88a3f9b4-6dfa-4710-932c-5ef5d2610a97",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ 'Re: ' + $json.subject }}",
+        "message": "={{ $json.replyText }}",
+        "options": {
+          "threadId": "={{ $json.threadId }}",
+          "sendTo": "={{ $json.senderEmail }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        112
+      ],
+      "id": "9db19070-b629-4061-8a0b-0e83ad5e5475",
+      "name": "Create a draft",
+      "webhookId": "aa235632-421e-45b7-b80f-7ae6971490c8",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "KD07betugHfQG8Q0",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Add label to message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add label to message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add label to message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add label to message2": {
+      "main": [
+        [
+          {
+            "node": "Get a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a message": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Create a draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1b2b2265-4f15-463b-8bf0-d2ad5e467a7f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cdde3bb9abf0d80d686c6cf3b105c908e6afb48349099022ae13318bddfbf9e4"
+  },
+  "nodeGroups": [],
+  "id": "9VisuQe9JMn7tcae",
+  "tags": []
+}
